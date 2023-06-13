@@ -3,6 +3,7 @@ package graphql
 import (
 	"context"
 
+	"github.com/graphql-go/graphql/cache"
 	"github.com/graphql-go/graphql/gqlerrors"
 	"github.com/graphql-go/graphql/language/parser"
 	"github.com/graphql-go/graphql/language/source"
@@ -31,7 +32,12 @@ type Params struct {
 	// Context may be provided to pass application-specific per-request
 	// information to resolve functions.
 	Context context.Context
+
+	// enable cache
+	EnableCache bool
 }
+
+var cacheStore = cache.NewCache()
 
 func Do(p Params) *Result {
 	source := source.NewSource(&source.Source{
@@ -82,9 +88,19 @@ func Do(p Params) *Result {
 			Errors: extErrs,
 		}
 	}
-
-	// validate document
-	validationResult := ValidateDocument(&p.Schema, AST, nil)
+	// default
+	validationResult := ValidationResult{
+		IsValid: true,
+	}
+	// if cache is enabled and the request string isn´t in the cache
+	if !p.EnableCache || !cacheStore.Get(p.RequestString) {
+		// validate document
+		validationResult = ValidateDocument(&p.Schema, AST, nil)
+		// only set cache if is valid
+		if p.EnableCache && validationResult.IsValid {
+			cacheStore.Set(p.RequestString)
+		}
+	}
 
 	if !validationResult.IsValid {
 		// run validation finish functions for extensions
@@ -96,7 +112,6 @@ func Do(p Params) *Result {
 			Errors: extErrs,
 		}
 	}
-
 	// run the validationFinishFuncs for extensions
 	extErrs = validationFinishFn(validationResult.Errors)
 	if len(extErrs) != 0 {
