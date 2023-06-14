@@ -3,12 +3,13 @@ package graphql
 import (
 	"context"
 
-	"github.com/ricardoFabioGomez/graphql/cache"
 	"github.com/ricardoFabioGomez/graphql/gqlerrors"
+	"github.com/ricardoFabioGomez/graphql/language/ast"
 	"github.com/ricardoFabioGomez/graphql/language/parser"
 	"github.com/ricardoFabioGomez/graphql/language/source"
 )
 
+type DocumentValidator func(schema *Schema, astDoc *ast.Document, rules []ValidationRuleFn) (vr ValidationResult)
 type Params struct {
 	// The GraphQL type system to use when validating and executing a query.
 	Schema Schema
@@ -33,11 +34,8 @@ type Params struct {
 	// information to resolve functions.
 	Context context.Context
 
-	// enable cache
-	EnableCache bool
+	DocumentValidator DocumentValidator
 }
-
-var cacheStore = cache.NewCache()
 
 func Do(p Params) *Result {
 	source := source.NewSource(&source.Source{
@@ -88,19 +86,11 @@ func Do(p Params) *Result {
 			Errors: extErrs,
 		}
 	}
-	// default
-	validationResult := ValidationResult{
-		IsValid: true,
+
+	if p.DocumentValidator == nil {
+		p.DocumentValidator = ValidateDocument
 	}
-	// if cache is enabled and the request string isn´t in the cache
-	if !p.EnableCache || !cacheStore.Get(p.RequestString) {
-		// validate document
-		validationResult = ValidateDocument(&p.Schema, AST, nil)
-		// only set cache if is valid
-		if p.EnableCache && validationResult.IsValid {
-			cacheStore.Set(p.RequestString)
-		}
-	}
+	validationResult := p.DocumentValidator(&p.Schema, AST, nil)
 
 	if !validationResult.IsValid {
 		// run validation finish functions for extensions
