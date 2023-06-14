@@ -9,7 +9,8 @@ import (
 	"github.com/ricardoFabioGomez/graphql/language/source"
 )
 
-type DocumentValidator func(schema *Schema, astDoc *ast.Document, rules []ValidationRuleFn) (vr ValidationResult)
+type ValidatorDocumentRules func(schema *Schema, astDoc *ast.Document, rules []ValidationRuleFn) (vr ValidationResult)
+
 type Params struct {
 	// The GraphQL type system to use when validating and executing a query.
 	Schema Schema
@@ -34,7 +35,7 @@ type Params struct {
 	// information to resolve functions.
 	Context context.Context
 
-	AvoidValidationRules bool
+	ValidatorDocumentRules ValidatorDocumentRules
 }
 
 func Do(p Params) *Result {
@@ -86,12 +87,10 @@ func Do(p Params) *Result {
 			Errors: extErrs,
 		}
 	}
-	var validationResult = ValidationResult{
-		IsValid: true,
+	if p.ValidatorDocumentRules == nil {
+		p.ValidatorDocumentRules = ValidateDocument
 	}
-	if !p.AvoidValidationRules {
-		validationResult = ValidateDocument(&p.Schema, AST, nil)
-	}
+	validationResult := p.ValidatorDocumentRules(&p.Schema, AST, nil)
 
 	if !validationResult.IsValid {
 		// run validation finish functions for extensions
