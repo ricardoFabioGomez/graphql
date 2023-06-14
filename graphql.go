@@ -34,7 +34,7 @@ type Params struct {
 	// information to resolve functions.
 	Context context.Context
 
-	DocumentValidator DocumentValidator
+	AvoidValidationRules bool
 }
 
 func Do(p Params) *Result {
@@ -86,11 +86,12 @@ func Do(p Params) *Result {
 			Errors: extErrs,
 		}
 	}
-
-	if p.DocumentValidator == nil {
-		p.DocumentValidator = ValidateDocument
+	var validationResult = ValidationResult{
+		IsValid: true,
 	}
-	validationResult := p.DocumentValidator(&p.Schema, AST, nil)
+	if !p.AvoidValidationRules {
+		validationResult = ValidateDocument(&p.Schema, AST, nil)
+	}
 
 	if !validationResult.IsValid {
 		// run validation finish functions for extensions
